@@ -1,0 +1,227 @@
+/**
+ * strings.js
+ * Bilingual English (EN) and Turkish (TR) strings for 101 Okey P2P.
+ */
+(function (root) {
+  'use strict';
+
+  const STRINGS = {
+    en: {
+      appTitle: '101 Okey P2P',
+      appSubtitle: '4-Player Host-Authoritative WebRTC Tile Game',
+      signalingConnecting: 'Signaling: Connecting...',
+      signalingConnected: 'Signaling: Ready',
+      signalingServerless: 'Discovery: Public P2P Relays',
+      signalingOffline: 'Signaling: Offline',
+      p2pIdle: 'P2P: Idle',
+      p2pLobby: 'P2P: In Lobby',
+      p2pActive: 'P2P: DataChannels Open',
+      p2pPaused: 'P2P: Host Disconnected (Paused)',
+
+      // Menu
+      hostTag: 'HOST • CREATE TABLE',
+      createTitle: 'Create a 101 Okey Lobby',
+      createDesc: 'Host a 4-player table directly in your browser. Share the room code or link with up to 3 friends.',
+      playerNameLabel: 'Your Display Name',
+      transportModeLabel: 'P2P Discovery Mode',
+      transportTrystero: 'Public Serverless Relays (Trystero — works across networks / static hosting)',
+      transportLocalWs: 'Local WebSocket Signaling (server.js — LAN / local testing)',
+      roundsLabel: 'Rounds',
+      timerLabel: 'Turn Timer (sec)',
+      createBtn: 'Create Lobby',
+
+      guestTag: 'GUEST • JOIN TABLE',
+      joinTitle: 'Join Existing Lobby',
+      joinDesc: 'Enter the 6-character room code or open a #CODE invite link from the host.',
+      joinBtn: 'Join Lobby',
+      turnSummary: 'Optional TURN Server (for cellular / strict NAT networks)',
+      turnHint: 'Public STUN servers are always active. Add Cloudflare or custom TURN credentials if players are behind symmetric cellular NATs.',
+
+      // Lobby
+      lobbyTitle: 'Table Lobby',
+      roomCodeLabel: 'Room Code',
+      copyCodeBtn: 'Copy Code',
+      copyLinkBtn: 'Copy Invite Link',
+      copiedText: 'Copied!',
+      fillBotsLabel: 'Fill empty seats with bots on start',
+      startGameBtn: 'Start 101 Okey',
+      leaveLobbyBtn: 'Leave Lobby',
+      waitingForHostStart: 'Waiting for the host to start the game...',
+      seatHost: 'Host',
+      seatGuest: 'Player',
+      seatBot: 'Bot',
+      seatEmpty: 'Open Seat (Waiting...)',
+      seatConnected: 'Connected',
+      seatDisconnected: 'Disconnected',
+      seatYou: 'YOU',
+
+      // Classic 101 Okey Board Controls
+      roundSuffix: 'RD',
+      ciftAcBtn: 'OPEN\nPAIRS',
+      seriAcBtn: 'OPEN\nSERIES',
+      isleBtn: 'LAY OFF',
+      ciftDizBtn: 'PAIRS\nSORT',
+      seriDizBtn: 'SERIES\nSORT',
+
+      // Gameplay HUD
+      roundIndicator: 'Round',
+      turnIndicator: 'Turn',
+      yourTurnDraw: 'YOUR TURN — Tap center deck to draw or tap bottom-left discard to take',
+      yourTurnAct: 'YOUR TURN — Open melds or drag/tap a tile to bottom-right discard',
+      waitingTurn: 'Turn:',
+      indicatorLabel: 'Indicator',
+      okeyLabel: 'Okey (Wild)',
+      drawPileLabel: 'Draw Pile',
+      drawBtn: 'Draw Tile',
+      takeDiscardBtn: 'Take Discard',
+      returnDiscardBtn: 'Undo Take',
+      stagedTotalLabel: 'Staged Opening Points',
+      stagedPairsLabel: 'Staged Pairs',
+      newMeldGroupBtn: '+ New Group',
+      clearStagedBtn: 'Return to Rack',
+      openMeldsBtn: 'Play Staged Melds',
+      discardSelectedBtn: 'Discard Selected',
+      sortRunsBtn: 'Sort: Runs (1-2-3)',
+      sortSetsBtn: 'Sort: Sets (7-7-7)',
+      autoGroupBtn: 'Suggest Melds',
+      leaveGameBtn: 'Leave Game',
+      nextRoundBtn: 'Next Round',
+      gamePausedBanner: 'Game Paused — Connection to Host lost. Waiting to reconnect...',
+
+      // Table & Rack
+      tableMeldsTitle: 'Table Melds',
+      noTableMelds: '',
+      stagedAreaTitle: 'Manual Meld Staging & Network Diagnostics',
+      rackTitle: 'Your Tile Rack',
+      openedSetsBadge: '101+',
+      openedPairsBadge: 'Pairs',
+      unopenedBadge: '-',
+      scoreboardTitle: 'Scores (Lowest Wins)',
+      roundEndTitle: 'Round Complete',
+      matchEndTitle: 'Winner:',
+
+      // Diagnostics
+      diagTitle: 'P2P Network Diagnostics',
+      diagTransport: 'Adapter',
+      diagP2PStatus: 'P2P Status',
+      diagDataChannel: 'DataChannel',
+      diagPing: 'Ping (RTT)',
+      diagPeers: 'Connected Peers',
+      diagSeat: 'Local Seat',
+      diagRoom: 'Room Code',
+      diagConnType: 'ICE Candidate Pair',
+      diagServerBytes: 'Gameplay via Server',
+      diagNever: '0 B (Pure WebRTC)'
+    },
+
+    tr: {
+      appTitle: '101 Okey P2P',
+      appSubtitle: '4 Kişilik Sunucusuz WebRTC 101 Okey',
+      signalingConnecting: 'Sinyal: Bağlanıyor...',
+      signalingConnected: 'Sinyal: Hazır',
+      signalingServerless: 'Keşif: Açık P2P Röleleri',
+      signalingOffline: 'Sinyal: Çevrimdışı',
+      p2pIdle: 'P2P: Boşta',
+      p2pLobby: 'P2P: Lobide',
+      p2pActive: 'P2P: Veri Kanalı Açık',
+      p2pPaused: 'P2P: Kurucu Bağlantısı Koptu (Duraklatıldı)',
+
+      // Menu
+      hostTag: 'KURUCU • MASA AÇ',
+      createTitle: 'Yeni 101 Okey Masası Kur',
+      createDesc: 'Tarayıcınızda 4 kişilik masa kurun. Oda kodunu veya davet bağlantısını arkadaşlarınızla paylaşın.',
+      playerNameLabel: 'Oyuncu Adınız',
+      transportModeLabel: 'P2P Bağlantı Modu',
+      transportTrystero: 'Açık Sunucusuz Röleler (Trystero — farklı ağlar / statik barındırma)',
+      transportLocalWs: 'Yerel WebSocket Sinyal (server.js — aynı Wi-Fi / yerel test)',
+      roundsLabel: 'El Sayısı',
+      timerLabel: 'Hamle Süresi (sn)',
+      createBtn: 'Masa Kur',
+
+      guestTag: 'MİSAFİR • MASAYA KATIL',
+      joinTitle: 'Mevcut Masaya Katıl',
+      joinDesc: '6 haneli oda kodunu girin veya kurucunun gönderdiği #KOD bağlantısını açın.',
+      joinBtn: 'Masaya Katıl',
+      turnSummary: 'İsteğe Bağlı TURN Sunucusu (mobil veri / katı NAT ağları için)',
+      turnHint: 'Genel STUN sunucuları her zaman aktiftir. Mobil veri (CGNAT) arkasında doğrudan bağlantı kurulamazsa TURN bilgilerini girin.',
+
+      // Lobby
+      lobbyTitle: 'Masa Lobisi',
+      roomCodeLabel: 'Oda Kodu',
+      copyCodeBtn: 'Kodu Kopyala',
+      copyLinkBtn: 'Davet Linkini Kopyala',
+      copiedText: 'Kopyalandı!',
+      fillBotsLabel: 'Boş koltukları botlarla doldur',
+      startGameBtn: '101 Okey Başlat',
+      leaveLobbyBtn: 'Lobiden Ayrıl',
+      waitingForHostStart: 'Kurucunun oyunu başlatması bekleniyor...',
+      seatHost: 'Kurucu',
+      seatGuest: 'Oyuncu',
+      seatBot: 'Bot',
+      seatEmpty: 'Boş Koltuk (Bekleniyor...)',
+      seatConnected: 'Bağlı',
+      seatDisconnected: 'Koptu',
+      seatYou: 'SİZ',
+
+      // Classic 101 Okey Board Controls
+      roundSuffix: 'EL',
+      ciftAcBtn: 'ÇİFT\nAÇ',
+      seriAcBtn: 'SERİ\nAÇ',
+      isleBtn: 'İŞLE',
+      ciftDizBtn: 'ÇİFT\nDİZ',
+      seriDizBtn: 'SERİ\nDİZ',
+
+      // Gameplay HUD
+      roundIndicator: 'El',
+      turnIndicator: 'Sıra',
+      yourTurnDraw: 'SIRA SİZDE — Ortadan taş çekin veya sol alttaki taşı alın',
+      yourTurnAct: 'SIRA SİZDE — Per açın veya sağ alt köşeye taş atın',
+      waitingTurn: 'Sıra:',
+      indicatorLabel: 'Gösterge',
+      okeyLabel: 'Okey',
+      drawPileLabel: 'Deste',
+      drawBtn: 'Taş Çek',
+      takeDiscardBtn: 'Yandan Al',
+      returnDiscardBtn: 'Geri Al',
+      stagedTotalLabel: 'Hazırlanan Seri Puanı',
+      stagedPairsLabel: 'Hazırlanan Çift',
+      newMeldGroupBtn: '+ Yeni Per',
+      clearStagedBtn: 'Istakaya Koy',
+      openMeldsBtn: 'Perleri Aç',
+      discardSelectedBtn: 'Seçili Taşı At',
+      sortRunsBtn: 'Seri Diz (1-2-3)',
+      sortSetsBtn: 'Çift/Per Diz (7-7-7)',
+      autoGroupBtn: 'Per Öner',
+      leaveGameBtn: 'Ayrıl',
+      nextRoundBtn: 'Sonraki El',
+      gamePausedBanner: 'Oyun Duraklatıldı — Kurucu bağlantısı koptu. Yeniden bağlanması bekleniyor...',
+
+      // Table & Rack
+      tableMeldsTitle: 'Açılan Perler',
+      noTableMelds: '',
+      stagedAreaTitle: 'Manuel Per Hazırlama & P2P Ağ Tanılama',
+      rackTitle: 'Istakanız',
+      openedSetsBadge: '101+',
+      openedPairsBadge: 'Çift',
+      unopenedBadge: '-',
+      scoreboardTitle: 'Skor Tablosu (En Düşük Kazanır)',
+      roundEndTitle: 'El Tamamlandı',
+      matchEndTitle: 'Kazanan:',
+
+      // Diagnostics
+      diagTitle: 'P2P Ağ Tanılama',
+      diagTransport: 'Adaptör',
+      diagP2PStatus: 'P2P Durumu',
+      diagDataChannel: 'Veri Kanalı',
+      diagPing: 'Gecikme (RTT)',
+      diagPeers: 'Bağlı Eşler',
+      diagSeat: 'Koltuk',
+      diagRoom: 'Oda Kodu',
+      diagConnType: 'ICE Aday Çifti',
+      diagServerBytes: 'Sunucu Oyun Verisi',
+      diagNever: '0 B (Saf WebRTC)'
+    }
+  };
+
+  root.OKEY_STRINGS = STRINGS;
+})(typeof self !== 'undefined' ? self : this);

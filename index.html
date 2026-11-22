@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>101 Okey P2P — 4-Player WebRTC Tile Game</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <!-- Top Bar -->
+    <header class="top-bar">
+      <div class="brand">
+        <span class="brand-dot"></span>
+        <h1 data-i18n="appTitle">101 Okey P2P</h1>
+        <span class="subtitle" data-i18n="appSubtitle">4-Player Host-Authoritative WebRTC Tile Game</span>
+      </div>
+      <div class="top-status">
+        <div class="lang-switch" role="group" aria-label="Language">
+          <button id="btn-lang-tr" type="button" class="lang-btn active">TR</button>
+          <button id="btn-lang-en" type="button" class="lang-btn">EN</button>
+        </div>
+        <span id="signaling-badge" class="badge badge-warn">Signaling: Ready</span>
+        <span id="webrtc-badge" class="badge badge-neutral">P2P: Idle</span>
+      </div>
+    </header>
+
+    <!-- Alert Banner -->
+    <div id="alert-banner" class="alert-banner hidden" role="alert">
+      <span id="alert-text"></span>
+      <button id="alert-close-btn" class="alert-close" aria-label="Dismiss">&times;</button>
+    </div>
+
+    <!-- Pause Banner -->
+    <div id="pause-banner" class="pause-banner hidden" role="status">
+      <span class="spinner"></span>
+      <span id="pause-banner-text" data-i18n="gamePausedBanner">
+        Game Paused — Connection to Host lost. Waiting to reconnect...
+      </span>
+    </div>
+
+    <!-- SCREEN 1: Main Menu -->
+    <main id="screen-menu" class="screen">
+      <div class="menu-settings-bar card">
+        <div class="settings-grid">
+          <label class="field-label">
+            <span data-i18n="playerNameLabel">Your Display Name</span>
+            <input id="input-player-name" type="text" maxlength="18" placeholder="Alper" />
+          </label>
+        </div>
+      </div>
+
+      <div class="card-grid">
+        <section class="card">
+          <div class="card-tag tag-host" data-i18n="hostTag">HOST &bull; CREATE TABLE</div>
+          <h2 data-i18n="createTitle">Create a 101 Okey Lobby</h2>
+          <p class="card-desc" data-i18n="createDesc">
+            Host a 4-player table directly in your browser. Share the room code or link with up to 3 friends.
+          </p>
+          <div class="host-create-options">
+            <label class="field-label">
+              <span data-i18n="roundsLabel">Rounds (Standard: 1)</span>
+              <select id="select-rounds">
+                <option value="1" selected>1</option>
+                <option value="2">2</option>
+                <option value="3">3</option>
+                <option value="5">5</option>
+              </select>
+            </label>
+            <label class="field-label">
+              <span data-i18n="timerLabel">Turn Timer (Standard: 60s)</span>
+              <select id="select-timer">
+                <option value="30">30s</option>
+                <option value="45">45s</option>
+                <option value="60" selected>60s</option>
+                <option value="90">90s</option>
+                <option value="120">120s</option>
+              </select>
+            </label>
+          </div>
+          <button id="btn-create-lobby" type="button" class="btn btn-primary btn-large" data-i18n="createBtn">
+            Create Lobby
+          </button>
+        </section>
+
+        <section class="card">
+          <div class="card-tag tag-guest" data-i18n="guestTag">GUEST &bull; JOIN TABLE</div>
+          <h2 data-i18n="joinTitle">Join Existing Lobby</h2>
+          <p class="card-desc" data-i18n="joinDesc">
+            Enter the 6-character room code or open a #CODE invite link from the host.
+          </p>
+          <form id="join-form" class="join-form" autocomplete="off">
+            <input
+              id="input-room-code"
+              type="text"
+              maxlength="6"
+              placeholder="CODE"
+              aria-label="Room code"
+              autocapitalize="characters"
+              spellcheck="false"
+              required
+            />
+            <button id="btn-join-lobby" type="submit" class="btn btn-accent btn-large" data-i18n="joinBtn">
+              Join Lobby
+            </button>
+          </form>
+        </section>
+      </div>
+    </main>
+
+    <!-- SCREEN 2: 4-Seat Lobby -->
+    <main id="screen-waiting" class="screen hidden">
+      <section class="card waiting-card">
+        <div id="waiting-role-tag" class="card-tag tag-host">HOST (SEAT 1)</div>
+        <h2 id="waiting-title" data-i18n="lobbyTitle">Table Lobby</h2>
+
+        <div class="room-code-box">
+          <div id="display-room-code" class="room-code-large">------</div>
+          <div class="lobby-copy-row">
+            <button id="btn-copy-code" type="button" class="btn btn-secondary" data-i18n="copyCodeBtn">Copy Code</button>
+            <button id="btn-copy-link" type="button" class="btn btn-secondary" data-i18n="copyLinkBtn">Copy Invite Link</button>
+          </div>
+        </div>
+
+        <div id="lobby-seats-grid" class="lobby-seats-grid"></div>
+
+        <div id="host-lobby-controls" class="host-lobby-controls">
+          <label class="bot-toggle-label">
+            <input id="chk-fill-bots" type="checkbox" checked />
+            <span data-i18n="fillBotsLabel">Fill empty seats with bots on start</span>
+          </label>
+          <button id="btn-start-game" type="button" class="btn btn-primary btn-large" data-i18n="startGameBtn">
+            Start 101 Okey
+          </button>
+        </div>
+
+        <div id="guest-lobby-notice" class="waiting-status-box hidden">
+          <span class="spinner"></span>
+          <span id="waiting-status-text" data-i18n="waitingForHostStart">Waiting for the host to start the game...</span>
+        </div>
+
+        <button id="btn-cancel-waiting" type="button" class="btn btn-danger" data-i18n="leaveLobbyBtn">
+          Leave Lobby
+        </button>
+      </section>
+    </main>
+
+    <!-- SCREEN 3: Classic Turkish 101 Okey Table Arena -->
+    <main id="screen-game" class="screen hidden">
+      <!-- Slim status strip above table -->
+      <div class="arena-status-bar">
+        <div class="hud-left">
+          <span id="hud-turn-banner" class="turn-banner">Sıra: Oyuncu 1</span>
+          <button id="btn-return-discard" type="button" class="btn btn-secondary btn-xs hidden" data-i18n="returnDiscardBtn">
+            Geri Al
+          </button>
+        </div>
+        <div class="hud-right">
+          <button id="btn-next-round" type="button" class="btn btn-primary btn-xs hidden" data-i18n="nextRoundBtn">
+            Sonraki El
+          </button>
+          <button id="btn-toggle-drawer" type="button" class="btn btn-secondary btn-xs">
+            P2P &amp; Skorlar
+          </button>
+          <button id="btn-leave-game" type="button" class="btn btn-danger btn-xs" data-i18n="leaveGameBtn">
+            Ayrıl
+          </button>
+        </div>
+      </div>
+
+      <!-- Classic 101 Okey Table Canvas Arena -->
+      <div class="okey-arena">
+        <!-- Upper Table Section: Left Rail + Center Felt Grid + Right Rail -->
+        <div class="arena-upper">
+          <!-- Left Rail: Top-Left Discard + Top Player Plaque + Left Player Vertical Plaque -->
+          <div class="arena-rail rail-left">
+            <div class="top-left-cluster">
+              <div id="discard-slot-top" class="corner-discard-slot" title="Across player's discard"></div>
+              <div id="plaque-top" class="wood-plaque plaque-top"></div>
+            </div>
+            <div id="plaque-left" class="wood-plaque plaque-vertical plaque-left"></div>
+          </div>
+
+          <!-- Center Green Felt Melds Board (Dual Grid: Left = Series/Sets, Right = Pairs) -->
+          <div class="felt-board-wrapper">
+            <div class="felt-board-main">
+              <!-- Series / Sets Grid -->
+              <div class="felt-grid-panel felt-series-panel" id="table-melds-list"></div>
+              <div class="felt-corner-badge badge-left" id="felt-series-badge">101</div>
+            </div>
+            <div class="felt-board-pairs">
+              <!-- Pairs Grid -->
+              <div class="felt-grid-panel felt-pairs-panel" id="table-pairs-list"></div>
+              <div class="felt-corner-badge badge-right" id="felt-pairs-badge">0</div>
+            </div>
+
+            <!-- End-of-Round / End-of-Match Ranked Standings Overlay (1st to 4th) -->
+            <div id="round-results-modal" class="round-results-modal hidden" role="dialog" aria-label="Round Results">
+              <div class="results-card">
+                <div class="results-header">
+                  <h3 id="results-modal-title">El Sonucu — Puan Sıralaması</h3>
+                  <p id="results-modal-subtitle" class="results-subtitle"></p>
+                </div>
+                <table class="results-ranking-table">
+                  <thead>
+                    <tr>
+                      <th>#</th>
+                      <th>Oyuncu</th>
+                      <th>Durum</th>
+                      <th>Bu El</th>
+                      <th>Toplam</th>
+                      <th>Yeni El</th>
+                    </tr>
+                  </thead>
+                  <tbody id="results-ranking-body"></tbody>
+                </table>
+                <div class="results-footer">
+                  <button id="btn-accept-next" type="button" class="btn btn-primary">
+                    Tekrar Oyna (Kabul Et)
+                  </button>
+                  <button id="btn-decline-next" type="button" class="btn btn-danger">
+                    Reddet &amp; Ayrıl
+                  </button>
+                  <button id="btn-modal-next-round" type="button" class="btn btn-secondary hidden">
+                    Bekleyenleri Bot Yap &amp; Başlat
+                  </button>
+                  <span id="results-guest-wait" class="results-wait-hint hidden">
+                    Diğer oyuncuların onayı bekleniyor...
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Right Rail: Top-Right Discard + Right Player Vertical Plaque -->
+          <div class="arena-rail rail-right">
+            <div id="discard-slot-right" class="corner-discard-slot" title="Right player's discard"></div>
+            <div id="plaque-right" class="wood-plaque plaque-vertical plaque-right"></div>
+          </div>
+        </div>
+
+        <!-- Middle Control Strip (Directly above the wooden rack, matching screenshot) -->
+        <div class="arena-control-bar">
+          <!-- Bottom-Left Discard (Previous player's discard — TAKEABLE!) -->
+          <div id="discard-slot-left" class="corner-discard-slot discard-take-slot" title="Previous player's discard (Tap to take)"></div>
+
+          <!-- Round & Live Rack Points Badge (1/3 EL + 101 pill) -->
+          <div class="round-points-stack">
+            <div id="hud-round-badge" class="el-label">1/3 EL</div>
+            <div id="rack-points-pill" class="wood-points-pill">0</div>
+          </div>
+
+          <!-- Action Buttons Left of Local Player Plaque: ÇİFT AÇ, SERİ AÇ, İŞLE -->
+          <div class="bevel-btn-group">
+            <button id="btn-cift-ac" type="button" class="bevel-btn bevel-orange" data-i18n="ciftAcBtn">ÇİFT&#10;AÇ</button>
+            <button id="btn-open-melds" type="button" class="bevel-btn bevel-green" data-i18n="seriAcBtn">SERİ&#10;AÇ</button>
+            <button id="btn-isle" type="button" class="bevel-btn bevel-cyan" data-i18n="isleBtn">İŞLE</button>
+          </div>
+
+          <!-- Local Player Center Plaque (with active green glow dome) -->
+          <div class="local-plaque-wrapper">
+            <div id="local-turn-dome" class="turn-glow-dome"></div>
+            <div id="plaque-bottom" class="wood-plaque plaque-bottom">
+              <div class="avatar-box avatar-local">🧔🏻</div>
+              <div class="plaque-info">
+                <div id="local-plaque-name" class="plaque-name">ALPER</div>
+                <div id="local-plaque-score" class="plaque-score">0 p</div>
+              </div>
+              <div class="plaque-stats">
+                <div id="local-plaque-opened" class="plaque-opened">0</div>
+                <div id="hud-timer-badge" class="plaque-timer">--</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Sort Buttons Right of Local Player Plaque: ÇİFT DİZ, SERİ DİZ -->
+          <div class="bevel-btn-group">
+            <button id="btn-sort-sets" type="button" class="bevel-btn bevel-orange" data-i18n="ciftDizBtn">ÇİFT&#10;DİZ</button>
+            <button id="btn-sort-runs" type="button" class="bevel-btn bevel-green" data-i18n="seriDizBtn">SERİ&#10;DİZ</button>
+          </div>
+
+          <!-- Indicator Tile + Face-Down Draw Pile Stock + Discard Arrow -->
+          <div class="stock-indicator-cluster">
+            <div id="indicator-tile-slot" class="table-indicator-slot" title="Indicator (Gösterge)"></div>
+            <button id="btn-draw-stock" type="button" class="table-stock-tile" title="Draw Tile (Ortadan Çek)">
+              <span id="draw-pile-count" class="stock-tile-count">20</span>
+            </button>
+            <button id="btn-discard-selected" type="button" class="discard-arrow-btn" title="Discard Selected Tile (Seçili Taşı At)">
+              &#10549;
+            </button>
+          </div>
+
+          <!-- Bottom-Right Discard (YOUR discard pile!) + Gear Icon -->
+          <div class="bottom-right-cluster">
+            <div id="discard-slot-bottom" class="corner-discard-slot discard-my-slot" title="Your discard pile (Drop or tap to discard)"></div>
+            <button id="btn-gear-drawer" type="button" class="gear-btn" title="Diagnostics, Scores & Manual Staging" aria-label="Settings">&#9881;</button>
+          </div>
+        </div>
+
+        <!-- Wooden Two-Row Istaka (Tile Rack) -->
+        <div class="istaka-wrapper">
+          <div class="istaka-rail rail-cap-left">
+            <span class="rivet"></span>
+            <span class="rivet"></span>
+          </div>
+          <div class="rack-board" id="player-rack-board">
+            <div class="rack-row" id="rack-row-0" data-row="0"></div>
+            <div class="istaka-divider"></div>
+            <div class="rack-row" id="rack-row-1" data-row="1"></div>
+          </div>
+          <div class="istaka-rail rail-cap-right">
+            <span class="rivet"></span>
+            <span class="rivet"></span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Slide-Down / Collapsible Drawer: Scoreboard, Manual Staging, Quick Buttons & P2P Diagnostics -->
+      <section id="arena-drawer" class="arena-drawer hidden">
+        <div class="drawer-grid">
+          <!-- Manual Meld Staging & Helper Controls -->
+          <div class="card drawer-card">
+            <div class="section-header">
+              <h3 data-i18n="stagedAreaTitle">Manual Meld Staging &amp; Helpers</h3>
+              <div class="staged-controls">
+                <span id="staged-counter-badge" class="badge badge-neutral">0 / 101 pts</span>
+                <button id="btn-take-discard" type="button" class="btn btn-accent btn-xs" data-i18n="takeDiscardBtn">Yandan Al</button>
+                <button id="btn-new-meld-group" type="button" class="btn btn-secondary btn-xs" data-i18n="newMeldGroupBtn">+ Per</button>
+                <button id="btn-auto-group" type="button" class="btn btn-secondary btn-xs" data-i18n="autoGroupBtn">Per Öner</button>
+                <button id="btn-clear-staged" type="button" class="btn btn-secondary btn-xs" data-i18n="clearStagedBtn">Istakaya Koy</button>
+              </div>
+            </div>
+            <div class="okey-helper-row">
+              <span class="mini-label" data-i18n="okeyLabel">Active Okey (Wild):</span>
+              <div id="okey-tile-slot"></div>
+            </div>
+            <div id="staged-groups-container" class="staged-groups-container"></div>
+            <div id="game-seats-strip" class="hidden"></div>
+          </div>
+
+          <!-- Scoreboard -->
+          <div class="card drawer-card">
+            <h3 data-i18n="scoreboardTitle">Scores (Lowest Wins)</h3>
+            <div id="round-end-summary" class="round-end-summary hidden"></div>
+            <table class="score-table">
+              <thead>
+                <tr>
+                  <th>Player</th>
+                  <th>Round</th>
+                  <th>Total</th>
+                </tr>
+              </thead>
+              <tbody id="score-table-body"></tbody>
+            </table>
+          </div>
+
+          <!-- P2P Network Diagnostics Panel -->
+          <aside class="diagnostics-panel" aria-label="Network diagnostics">
+            <h3 data-i18n="diagTitle">P2P Network Diagnostics</h3>
+            <div id="diag-direct-banner" class="diag-direct-banner">Connecting...</div>
+            <dl class="diag-list">
+              <div class="diag-row"><dt data-i18n="diagTransport">Adapter</dt><dd id="diag-adapter">-</dd></div>
+              <div class="diag-row"><dt data-i18n="diagP2PStatus">P2P Status</dt><dd id="diag-p2p-status">-</dd></div>
+              <div class="diag-row"><dt data-i18n="diagDataChannel">DataChannel</dt><dd id="diag-dc-status">-</dd></div>
+              <div class="diag-row"><dt data-i18n="diagPing">Ping (RTT)</dt><dd id="diag-ping">-- ms</dd></div>
+              <div class="diag-row"><dt data-i18n="diagPeers">Connected Peers</dt><dd id="diag-peers">0</dd></div>
+              <div class="diag-row"><dt data-i18n="diagSeat">Local Seat</dt><dd id="diag-player-id">-</dd></div>
+              <div class="diag-row"><dt data-i18n="diagRoom">Room Code</dt><dd id="diag-room-code">-</dd></div>
+              <div class="diag-row"><dt data-i18n="diagConnType">ICE Candidate Pair</dt><dd id="diag-conn-type">-</dd></div>
+              <div class="diag-row"><dt data-i18n="diagServerBytes">Gameplay via Server</dt><dd class="diag-zero" data-i18n="diagNever">0 B (Pure WebRTC)</dd></div>
+            </dl>
+          </aside>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="/strings.js"></script>
+  <script src="/engine.js"></script>
+  <script src="/transport.js"></script>
+  <script src="/network.js"></script>
+  <script src="/game.js"></script>
+</body>
+</html>
