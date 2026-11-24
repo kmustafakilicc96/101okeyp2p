@@ -202,7 +202,7 @@ async function connectCDP() {
   }
   check(true, 'Game started on all 4 peers automatically');
 
-  // Verify initial tile counts: Starter (Seat 0) = 22, Seats 1..3 = 21, Draw pile = 20
+  // Verify initial tile counts: Random Starter = 22, other 3 seats = 21, Draw pile = 20
   const rackLengths = [
     await host.eval(`${G}.privateRack.length`),
     await g1.eval(`${G}.privateRack.length`),
@@ -211,7 +211,9 @@ async function connectCDP() {
   ];
   const drawPileCount0 = await host.eval(`${G}.publicState.drawPileCount`);
   check(
-    rackLengths[0] === 22 && rackLengths[1] === 21 && rackLengths[2] === 21 && rackLengths[3] === 21 && drawPileCount0 === 20,
+    rackLengths.filter((n) => n === 22).length === 1 &&
+      rackLengths.filter((n) => n === 21).length === 3 &&
+      drawPileCount0 === 20,
     'Initial deal verified (22 + 21 + 21 + 21 + 1 indicator + 20 draw pile = 106 tiles)'
   );
 

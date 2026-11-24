@@ -47,6 +47,17 @@
             <span data-i18n="playerNameLabel">Your Display Name</span>
             <input id="input-player-name" type="text" maxlength="18" placeholder="Alper" />
           </label>
+          <div class="field-label">
+            <span data-i18n="rackColorLabel">Istaka Rengi (Tam Renk Paleti)</span>
+            <div class="rack-color-picker-row">
+              <label class="color-wheel-btn" title="Tam Renk Paleti (Full Color Palette)">
+                <input id="input-rack-color-menu" type="color" value="#a5611f" aria-label="Istaka Rengi" />
+                <span class="color-wheel-icon">🎨</span>
+                <span id="rack-color-hex-menu" class="color-hex-label">#A5611F</span>
+              </label>
+              <div class="rack-color-swatches" data-rack-swatches></div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -124,6 +135,19 @@
 
         <div id="lobby-seats-grid" class="lobby-seats-grid"></div>
 
+        <!-- Pre-Round Istaka Color Picker in Waiting Lobby -->
+        <div class="lobby-rack-color-box">
+          <span class="lobby-color-title" data-i18n="rackColorLobbyLabel">Istaka Renginiz:</span>
+          <div class="rack-color-picker-row">
+            <label class="color-wheel-btn" title="Tam Renk Paleti (Full Color Palette)">
+              <input id="input-rack-color-lobby" type="color" value="#a5611f" aria-label="Istaka Rengi" />
+              <span class="color-wheel-icon">🎨</span>
+              <span id="rack-color-hex-lobby" class="color-hex-label">#A5611F</span>
+            </label>
+            <div class="rack-color-swatches" data-rack-swatches></div>
+          </div>
+        </div>
+
         <div id="host-lobby-controls" class="host-lobby-controls">
           <label class="bot-toggle-label">
             <input id="chk-fill-bots" type="checkbox" checked />
@@ -186,12 +210,10 @@
             <div class="felt-board-main">
               <!-- Series / Sets Grid -->
               <div class="felt-grid-panel felt-series-panel" id="table-melds-list"></div>
-              <div class="felt-corner-badge badge-left" id="felt-series-badge">101</div>
             </div>
             <div class="felt-board-pairs">
               <!-- Pairs Grid -->
               <div class="felt-grid-panel felt-pairs-panel" id="table-pairs-list"></div>
-              <div class="felt-corner-badge badge-right" id="felt-pairs-badge">0</div>
             </div>
 
             <!-- End-of-Round / End-of-Match Ranked Standings Overlay (1st to 4th) -->
@@ -214,6 +236,15 @@
                   </thead>
                   <tbody id="results-ranking-body"></tbody>
                 </table>
+                <div class="results-rack-color-row">
+                  <span class="lobby-color-title" data-i18n="rackColorLobbyLabel">Istaka Renginiz:</span>
+                  <label class="color-wheel-btn" title="Tam Renk Paleti (Full Color Palette)">
+                    <input id="input-rack-color-modal" type="color" value="#a5611f" aria-label="Istaka Rengi" />
+                    <span class="color-wheel-icon">🎨</span>
+                    <span id="rack-color-hex-modal" class="color-hex-label">#A5611F</span>
+                  </label>
+                  <div class="rack-color-swatches" data-rack-swatches></div>
+                </div>
                 <div class="results-footer">
                   <button id="btn-accept-next" type="button" class="btn btn-primary">
                     Tekrar Oyna (Kabul Et)
@@ -264,11 +295,11 @@
               <div class="avatar-box avatar-local">🧔🏻</div>
               <div class="plaque-info">
                 <div id="local-plaque-name" class="plaque-name">ALPER</div>
-                <div id="local-plaque-score" class="plaque-score">0 p</div>
+                <div id="local-plaque-score" class="plaque-score hidden"></div>
               </div>
-              <div class="plaque-stats">
-                <div id="local-plaque-opened" class="plaque-opened">0</div>
-                <div id="hud-timer-badge" class="plaque-timer">--</div>
+              <div id="local-plaque-stats" class="plaque-stats hidden">
+                <div id="local-plaque-opened" class="plaque-opened hidden"></div>
+                <div id="hud-timer-badge" class="plaque-timer hidden">--</div>
               </div>
             </div>
           </div>
@@ -297,21 +328,24 @@
           </div>
         </div>
 
-        <!-- Wooden Two-Row Istaka (Tile Rack) -->
-        <div class="istaka-wrapper">
-          <div class="istaka-rail rail-cap-left">
-            <span class="rivet"></span>
-            <span class="rivet"></span>
+        <!-- Wooden Two-Row Istaka (Tile Rack) + Right-Side Red Penalty Display -->
+        <div class="istaka-row-container">
+          <div class="istaka-wrapper">
+            <div class="istaka-rail rail-cap-left">
+              <span class="rivet"></span>
+              <span class="rivet"></span>
+            </div>
+            <div class="rack-board" id="player-rack-board">
+              <div class="rack-row" id="rack-row-0" data-row="0"></div>
+              <div class="istaka-divider"></div>
+              <div class="rack-row" id="rack-row-1" data-row="1"></div>
+            </div>
+            <div class="istaka-rail rail-cap-right">
+              <span class="rivet"></span>
+              <span class="rivet"></span>
+            </div>
           </div>
-          <div class="rack-board" id="player-rack-board">
-            <div class="rack-row" id="rack-row-0" data-row="0"></div>
-            <div class="istaka-divider"></div>
-            <div class="rack-row" id="rack-row-1" data-row="1"></div>
-          </div>
-          <div class="istaka-rail rail-cap-right">
-            <span class="rivet"></span>
-            <span class="rivet"></span>
-          </div>
+          <div id="rack-penalty-badge" class="rack-penalty-badge hidden" title="Ceza Puanı">+101</div>
         </div>
       </div>
 

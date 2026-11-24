@@ -115,7 +115,7 @@ const mixedOpen = Engine.validateOpening([fivePairs[0], highRun1], indRed13);
 assert(!mixedOpen.valid && /mix/i.test(mixedOpen.reason), 'Mixing pairs and runs/sets in opening is rejected');
 
 // 5. Taken-discard restriction for unopened player + lay-off test
-const testState = Engine.createGameState({ roomCode: 'TEST01', seed: 'unit-seed-1', autoStart: true });
+const testState = Engine.createGameState({ roomCode: 'TEST01', seed: 'unit-seed-1', starterSeat: 0, autoStart: true });
 // Starter (seat 0) discards first tile
 const firstDiscardId = testState.seats[0].rack[0].id;
 assert(Engine.applyIntent(testState, 0, { type: 'DISCARD', tileId: firstDiscardId }).ok, 'Starter discards to end turn 1');
@@ -172,8 +172,32 @@ assert(
   jkrLayRes.retrievedOkey &&
   jkrLayRes.retrievedOkey.id === realOkey.id &&
   jokerRunState.seats[0].rack.some((t) => t.id === realOkey.id) &&
-  jokerRunState.tableMelds[0].tiles[2].id === blue10.id,
-  'Laying 10 onto [8, 9, Joker, 11] swaps 10 into the meld and gives the Joker to the player'
+  jokerRunState.tableMelds[0].tiles[2].id === blue10.id &&
+  jokerRunState.seats[1].penaltyAdjust === 101,
+  'Laying 10 onto [8, 9, Joker, 11] swaps 10 into the meld, gives the Joker to the player, and assigns +101 penalty to the meld owner'
+);
+
+// 6b-2. Series opener laying pairs after another player opened with pairs + discarding playable (işlek) tile penalty
+jokerRunState.seats[2].openedMode = 'pairs';
+const pairTileA = { id: 191, color: 'yellow', number: 12, isFakeJoker: false };
+const pairTileB = { id: 192, color: 'yellow', number: 12, isFakeJoker: false };
+const islekBlue12 = { id: 193, color: 'blue', number: 12, isFakeJoker: false };
+jokerRunState.seats[0].rack.push(pairTileA, pairTileB, islekBlue12);
+const layPairFromSetsOpener = Engine.applyIntent(jokerRunState, 0, {
+  type: 'OPEN_MELDS',
+  melds: [[pairTileA.id, pairTileB.id]]
+});
+assert(
+  layPairFromSetsOpener.ok && jokerRunState.tableMelds.some((m) => m.kind === 'pair' && m.ownerSeat === 0),
+  'Player who opened with series (sets) can lay down pairs after another player has opened with pairs'
+);
+const discardIslekRes = Engine.applyIntent(jokerRunState, 0, {
+  type: 'DISCARD',
+  tileId: islekBlue12.id
+});
+assert(
+  discardIslekRes.ok && jokerRunState.seats[0].penaltyAdjust === 101,
+  'Discarding a playable (işlek) tile when melds are on the table incurs a +101 penalty'
 );
 
 // 6c. Set Joker Retrieval rule: [Red 7, Yellow 7, Joker] + Blue 7 extends to 4 tiles (no retrieval);
@@ -293,6 +317,40 @@ assert(r4.ok && rematchState.phase === 'playing' && rematchState.roundIndex === 
   'Player 4 declines -> round 2 starts automatically in same lobby');
 assert(rematchState.seats[3].isBot === true && !rematchState.seats[1].isBot && !rematchState.seats[2].isBot,
   'Declining Player 4 is replaced with a Bot while accepting Players 1-3 remain human');
+
+// 7c. 1-round same-lobby rematch deals brand-new tiles & random starting player varies across seeds
+const oneRoundRematch = Engine.createGameState({
+  roomCode: 'REM1RD',
+  seed: 'one-round-rematch-seed',
+  totalRounds: 1,
+  seats: [
+    { name: 'P1', connected: true },
+    { name: 'P2', connected: true },
+    { name: 'P3', connected: true },
+    { name: 'P4', connected: true }
+  ],
+  autoStart: true
+});
+const deal1Rack0 = oneRoundRematch.seats[0].rack.map((t) => t.id).join(',');
+oneRoundRematch.currentTurn = 0;
+oneRoundRematch.turnPhase = 'act';
+oneRoundRematch.seats[0].openedMode = 'sets';
+oneRoundRematch.seats[0].rack = [oneRoundRematch.seats[0].rack[0]];
+assert(Engine.applyIntent(oneRoundRematch, 0, { type: 'DISCARD', tileId: oneRoundRematch.seats[0].rack[0].id }).ok, '1-round match ends');
+assert(oneRoundRematch.phase === 'matchEnd', '1-round match enters matchEnd');
+for (const s of [0, 1, 2, 3]) {
+  assert(Engine.applyIntent(oneRoundRematch, s, { type: 'READY_NEXT', accept: true }).ok, `Seat ${s} accepts rematch`);
+}
+const deal2Rack0 = oneRoundRematch.seats[0].rack.map((t) => t.id).join(',');
+assert(oneRoundRematch.phase === 'playing' && deal1Rack0 !== deal2Rack0,
+  '1-round match rematch in same lobby deals brand-new tiles to players');
+
+const starterSeatsSeen = new Set();
+for (let i = 0; i < 20; i++) {
+  const stRand = Engine.createGameState({ roomCode: 'RNDSTR', seed: `random-starter-${i}`, autoStart: true });
+  starterSeatsSeen.add(stRand.starterSeat);
+}
+assert(starterSeatsSeen.size > 1, `Starting player is chosen randomly across seeds (saw seats: ${[...starterSeatsSeen].join(', ')})`);
 
 // 8 & 9. Full seeded 4-bot round + PRIVACY TEST
 const botGame = Engine.createGameState({

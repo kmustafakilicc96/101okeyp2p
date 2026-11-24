@@ -63,6 +63,8 @@
 
   // Rack 2-row slot arrangement (array of 28 entries: tileId or null)
   let rackSlots = new Array(RACK_SLOTS_TOTAL).fill(null);
+  let lastArrangedDealKey = null;
+  let rackArrangeMode = 'runs'; // 'runs' (SERİ DİZ) | 'pairs' (ÇİFT DİZ)
   // Staged meld groups: Array of arrays of tileIds
   let stagedGroups = [[]];
   let activeStagedGroupIdx = 0;
@@ -112,6 +114,109 @@
 
   $('btn-lang-en').addEventListener('click', () => applyLanguage('en'));
   $('btn-lang-tr').addEventListener('click', () => applyLanguage('tr'));
+
+  // ---------------------------------------------------------------------------
+  // Full-Palette Istaka (Rack) Color Picker & 3D Shading Generator
+  // ---------------------------------------------------------------------------
+  const RACK_COLOR_STORAGE_KEY = 'okey101_rack_color_v1';
+  const RACK_PRESET_COLORS = [
+    { hex: '#a5611f', name: 'Klasik Ahşap (Classic Wood)' },
+    { hex: '#991b1b', name: 'Bordo Kırmızı (Crimson)' },
+    { hex: '#1e40af', name: 'Kraliyet Mavisi (Royal Blue)' },
+    { hex: '#065f46', name: 'Zümrüt Yeşili (Emerald)' },
+    { hex: '#5b21b6', name: 'Mor (Amethyst)' },
+    { hex: '#b45309', name: 'Kehribar Altın (Amber)' },
+    { hex: '#9d174d', name: 'Fuşya Pembe (Rose)' },
+    { hex: '#0f766e', name: 'Turkuaz (Teal)' },
+    { hex: '#334155', name: 'Gece Grisi (Slate)' }
+  ];
+
+  function normalizeHexColor(hex) {
+    const clean = String(hex || '').trim().replace(/^#/, '');
+    if (/^[0-9a-fA-F]{6}$/.test(clean)) return `#${clean.toLowerCase()}`;
+    if (/^[0-9a-fA-F]{3}$/.test(clean)) {
+      return `#${clean[0]}${clean[0]}${clean[1]}${clean[1]}${clean[2]}${clean[2]}`.toLowerCase();
+    }
+    return '#a5611f';
+  }
+
+  function shiftHexBrightness(hex, factor) {
+    const norm = normalizeHexColor(hex).slice(1);
+    let r = parseInt(norm.slice(0, 2), 16);
+    let g = parseInt(norm.slice(2, 4), 16);
+    let b = parseInt(norm.slice(4, 6), 16);
+    if (factor >= 0) {
+      r = Math.round(r + (255 - r) * factor);
+      g = Math.round(g + (255 - g) * factor);
+      b = Math.round(b + (255 - b) * factor);
+    } else {
+      const m = 1 + factor;
+      r = Math.round(r * m);
+      g = Math.round(g * m);
+      b = Math.round(b * m);
+    }
+    const clamp = (v) => Math.max(0, Math.min(255, v)).toString(16).padStart(2, '0');
+    return `#${clamp(r)}${clamp(g)}${clamp(b)}`;
+  }
+
+  function applyRackColor(rawHex) {
+    const baseHex = normalizeHexColor(rawHex);
+    const rootStyle = document.documentElement.style;
+    rootStyle.setProperty('--istaka-base', baseHex);
+    rootStyle.setProperty('--istaka-light', shiftHexBrightness(baseHex, 0.16));
+    rootStyle.setProperty('--istaka-mid', shiftHexBrightness(baseHex, 0.08));
+    rootStyle.setProperty('--istaka-dark', shiftHexBrightness(baseHex, -0.22));
+    rootStyle.setProperty('--istaka-ledge', shiftHexBrightness(baseHex, -0.34));
+    rootStyle.setProperty('--istaka-border', shiftHexBrightness(baseHex, -0.45));
+    rootStyle.setProperty('--istaka-deep', shiftHexBrightness(baseHex, -0.56));
+
+    try { localStorage.setItem(RACK_COLOR_STORAGE_KEY, baseHex); } catch (_) {}
+
+    ['input-rack-color-menu', 'input-rack-color-lobby', 'input-rack-color-modal'].forEach((id) => {
+      const inputEl = $(id);
+      if (inputEl && inputEl.value.toLowerCase() !== baseHex) inputEl.value = baseHex;
+    });
+    ['rack-color-hex-menu', 'rack-color-hex-lobby', 'rack-color-hex-modal'].forEach((id) => {
+      const lblEl = $(id);
+      if (lblEl) lblEl.textContent = baseHex.toUpperCase();
+    });
+    document.querySelectorAll('.rack-swatch-btn[data-color]').forEach((btn) => {
+      btn.classList.toggle('active', btn.dataset.color === baseHex);
+    });
+  }
+
+  function initRackColorPickers() {
+    let savedHex = '#a5611f';
+    try {
+      const fromStorage = localStorage.getItem(RACK_COLOR_STORAGE_KEY);
+      if (fromStorage) savedHex = normalizeHexColor(fromStorage);
+    } catch (_) {}
+
+    document.querySelectorAll('[data-rack-swatches]').forEach((container) => {
+      container.innerHTML = '';
+      RACK_PRESET_COLORS.forEach((preset) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'rack-swatch-btn';
+        btn.dataset.color = preset.hex;
+        btn.title = preset.name;
+        btn.style.background = `linear-gradient(180deg, ${shiftHexBrightness(preset.hex, 0.16)}, ${preset.hex})`;
+        btn.addEventListener('click', () => applyRackColor(preset.hex));
+        container.appendChild(btn);
+      });
+    });
+
+    ['input-rack-color-menu', 'input-rack-color-lobby', 'input-rack-color-modal'].forEach((id) => {
+      const inputEl = $(id);
+      if (inputEl) {
+        inputEl.addEventListener('input', (e) => applyRackColor(e.target.value));
+        inputEl.addEventListener('change', (e) => applyRackColor(e.target.value));
+      }
+    });
+
+    applyRackColor(savedHex);
+  }
+  initRackColorPickers();
 
   // ---------------------------------------------------------------------------
   // UI Helpers
@@ -567,7 +672,12 @@
         }
       } else if (hostState.turnPhase === 'act') {
         const botPlayer = hostState.seats[cur];
-        const discardTile = Engine.chooseSafeDiscardTile(botPlayer.rack, hostState.indicator);
+        const discardTile = Engine.chooseSafeDiscardTile(
+          botPlayer.rack,
+          hostState.indicator,
+          hostState.tableMelds,
+          hostState.config
+        );
         if (discardTile) {
           const discRes = Engine.applyIntent(hostState, cur, { type: 'DISCARD', tileId: discardTile.id });
           if (discRes.ok) {
@@ -630,8 +740,9 @@
       const prev = oldRects.get(id);
       if (!prev) return;
       const next = el.getBoundingClientRect();
-      const dx = prev.left - next.left;
-      const dy = prev.top - next.top;
+      const unitScale = (el.offsetWidth > 0 ? next.width / el.offsetWidth : 1) || 1;
+      const dx = (prev.left - next.left) / unitScale;
+      const dy = (prev.top - next.top) / unitScale;
       if (Math.abs(dx) < 2 && Math.abs(dy) < 2) return;
       if (typeof el.animate === 'function') {
         el.animate([
@@ -684,25 +795,46 @@
       ghost.classList.remove('selected');
     }
 
-    ghost.style.width = `${Math.max(32, fromRect.width)}px`;
-    ghost.style.height = `${Math.max(44, fromRect.height)}px`;
-    ghost.style.transform = `translate(${fromRect.left}px, ${fromRect.top}px)`;
+    // Measure CSS-pixel-to-viewport-rect scale factor (handles any body CSS zoom such as 1.25)
+    ghost.style.transformOrigin = '0 0';
+    ghost.style.width = '50px';
+    ghost.style.height = '70px';
+    ghost.style.transform = 'translate(0px, 0px)';
     fxOverlay.appendChild(ghost);
+
+    const probeRect = ghost.getBoundingClientRect();
+    const unitScale = (probeRect.width > 0 ? probeRect.width / 50 : 1) || 1;
+    const originX = probeRect.left || 0;
+    const originY = probeRect.top || 0;
+
+    const cssFromW = Math.max(24, fromRect.width / unitScale);
+    const cssFromH = Math.max(34, fromRect.height / unitScale);
+    const cssToW = Math.max(24, toRect.width / unitScale);
+    const cssToH = Math.max(34, toRect.height / unitScale);
+
+    const startX = (fromRect.left - originX) / unitScale;
+    const startY = (fromRect.top - originY) / unitScale;
+    const endX = (toRect.left - originX) / unitScale;
+    const endY = (toRect.top - originY) / unitScale;
+
+    ghost.style.width = `${cssFromW}px`;
+    ghost.style.height = `${cssFromH}px`;
+    ghost.style.transform = `translate(${startX}px, ${startY}px)`;
 
     if (targetEl) {
       targetEl.style.opacity = '0';
     }
 
-    const scaleX = toRect.width / Math.max(32, fromRect.width);
-    const scaleY = toRect.height / Math.max(44, fromRect.height);
-    const midX = (fromRect.left + toRect.left) / 2;
-    const midY = Math.min(fromRect.top, toRect.top) - 24;
+    const scaleX = cssToW / cssFromW;
+    const scaleY = cssToH / cssFromH;
+    const midX = (startX + endX) / 2;
+    const midY = Math.min(startY, endY) - 18;
 
     if (typeof ghost.animate === 'function') {
       const anim = ghost.animate([
-        { transform: `translate(${fromRect.left}px, ${fromRect.top}px) scale(1)`, opacity: 1 },
-        { transform: `translate(${midX}px, ${midY}px) scale(${Math.max(1.08, (1 + scaleX) / 2)})`, opacity: 1, offset: 0.5 },
-        { transform: `translate(${toRect.left}px, ${toRect.top}px) scale(${scaleX}, ${scaleY})`, opacity: 0.96 }
+        { transform: `translate(${startX}px, ${startY}px) scale(1)`, opacity: 1 },
+        { transform: `translate(${midX}px, ${midY}px) scale(${Math.max(1.06, (1 + scaleX) / 2)})`, opacity: 1, offset: 0.5 },
+        { transform: `translate(${endX}px, ${endY}px) scale(${scaleX}, ${scaleY})`, opacity: 0.96 }
       ], {
         duration: durationMs,
         delay: delayMs,
@@ -775,7 +907,16 @@
       }
     }
 
-    if (prevRound !== publicState.roundIndex || prevPhase === 'lobby') {
+    const currentDealKey = `${publicState.roomCode}:${publicState.roundIndex}:${publicState.dealCounter || 0}:${publicState.rematchCount || 0}`;
+    const isNewRoundStart =
+      currentDealKey !== lastArrangedDealKey ||
+      prevRound !== publicState.roundIndex ||
+      (prevPhase !== 'playing' && publicState.phase === 'playing') ||
+      (isNewSeq && act && act.type === 'ROUND_START');
+
+    if (isNewRoundStart && publicState.phase === 'playing') {
+      lastArrangedDealKey = currentDealKey;
+      rackArrangeMode = 'runs';
       stagedGroups = [[]];
       activeStagedGroupIdx = 0;
       selectedTileId = null;
@@ -983,6 +1124,29 @@
         }
       }
     }
+
+    // Display toast notification whenever a player incurs a +101 penalty (playable tile discarded, Okey discarded, or table Okey stolen)
+    if (act.penaltyPoints > 0 && act.penaltySeat != null && publicState.seats[act.penaltySeat]) {
+      const pName = publicState.seats[act.penaltySeat].name;
+      let penMsg = '';
+      if (act.penaltyReason === 'OKEY_STOLEN') {
+        penMsg = currentLang === 'en'
+          ? `${pName} received +${act.penaltyPoints} penalty because their table Okey was taken!`
+          : `${pName} açtığı perdeki Okey alındığı için +${act.penaltyPoints} ceza aldı!`;
+      } else if (act.penaltyReason === 'DISCARD_PLAYABLE') {
+        penMsg = currentLang === 'en'
+          ? `${pName} received +${act.penaltyPoints} penalty for discarding a playable (işlek) tile!`
+          : `${pName} ortadaki serilere işlek taş attığı için +${act.penaltyPoints} ceza aldı!`;
+      } else if (act.penaltyReason === 'DISCARD_OKEY') {
+        penMsg = currentLang === 'en'
+          ? `${pName} received +${act.penaltyPoints} penalty for discarding an Okey!`
+          : `${pName} yere Okey attığı için +${act.penaltyPoints} ceza aldı!`;
+      }
+      if (penMsg) {
+        showAlert(penMsg);
+        pulsePlaqueForSeat(act.penaltySeat);
+      }
+    }
   }
 
   /**
@@ -1000,7 +1164,7 @@
 
     const cand = Engine.findBestMeldsInRack(unStaged, ind, mustOpenWithTileId);
     const groups = mode === 'sets'
-      ? (cand.pairsCandidate.melds.length >= 2 ? cand.pairsCandidate.melds : cand.setsCandidate.melds)
+      ? (cand.pairsCandidate.melds.length >= 1 ? cand.pairsCandidate.melds : cand.setsCandidate.melds)
       : cand.setsCandidate.melds;
 
     const used = new Set();
@@ -1120,17 +1284,12 @@
       }
     }
 
-    // Also compare with best automatic partition so the live counter reflects either contiguous or best-found
-    const best = Engine.findBestMeldsInRack(privateRack, ind, mustOpenWithTileId);
-    const bestSeriesPts = best.setsCandidate.points;
-    const bestSeriesMelds = best.setsCandidate.melds.map((m) => m.map((t) => t.id));
-    const bestPairMelds = best.pairsCandidate.melds.map((m) => m.map((t) => t.id));
-
+    // Only return melds and points that are ACTUALLY arranged (dizili) on the rack
     return {
-      seriesMelds: seriesPoints >= bestSeriesPts ? seriesMelds : bestSeriesMelds,
-      seriesPoints: Math.max(seriesPoints, bestSeriesPts),
-      pairMelds: pairMelds.length >= bestPairMelds.length ? pairMelds : bestPairMelds,
-      pairCount: Math.max(pairMelds.length, bestPairMelds.length)
+      seriesMelds,
+      seriesPoints,
+      pairMelds,
+      pairCount: pairMelds.length
     };
   }
 
@@ -1335,15 +1494,37 @@
     return Math.max(0, Math.ceil((publicState.turnDeadlineMs - Date.now()) / 1000));
   }
 
+  function getOpenedDisplayScore(seatObj) {
+    if (!seatObj || !seatObj.openedMode) return null;
+    if (seatObj.openedScore != null) return String(seatObj.openedScore);
+    return seatObj.openedMode === 'pairs' ? '55' : '101';
+  }
+
   function renderTimerBadge() {
+    if (!publicState) return;
     const rem = getRemainingTurnSeconds();
-    const txt = rem != null ? `${rem}s` : '--';
-    $('hud-timer-badge').textContent = txt;
-    const topTimerEl = document.querySelector('#plaque-top .p-timer-text');
-    if (topTimerEl && publicState) {
-      const topSeatIdx = ((localSeat || 0) + 2) % 4;
-      topTimerEl.textContent = publicState.currentTurn === topSeatIdx ? txt : `${publicState.seats[topSeatIdx].tileCount}t`;
+    const txt = rem != null ? `${rem}s` : '';
+    const mySeat = localSeat != null ? localSeat : 0;
+    const isMyTurn = publicState.phase === 'playing' && publicState.currentTurn === mySeat;
+    const mySeatObj = publicState.seats[mySeat];
+    const myOpenedStr = getOpenedDisplayScore(mySeatObj);
+
+    const localTimerEl = $('hud-timer-badge');
+    if (localTimerEl) {
+      localTimerEl.textContent = isMyTurn ? txt : '';
+      localTimerEl.classList.toggle('hidden', !isMyTurn || !txt);
     }
+    const localStatsBox = $('local-plaque-stats');
+    if (localStatsBox) {
+      localStatsBox.classList.toggle('hidden', !myOpenedStr && !(isMyTurn && txt));
+    }
+
+    document.querySelectorAll('.p-timer-text[data-seat]').forEach((el) => {
+      const seatIdx = Number(el.dataset.seat);
+      const isTurn = publicState.phase === 'playing' && publicState.currentTurn === seatIdx;
+      el.textContent = isTurn ? txt : '';
+      el.classList.toggle('hidden', !isTurn || !txt);
+    });
   }
 
   function renderPlayerPlaquesAndCornerDiscards(ind, isMyTurn) {
@@ -1353,40 +1534,63 @@
     const leftSeat = (mySeat + 3) % 4; // Previous player whose discard is takeable!
 
     const rem = getRemainingTurnSeconds();
-    const timerTxt = rem != null ? `${rem}s` : '--';
+    const timerTxt = rem != null ? `${rem}s` : '';
 
     // 1. Bottom Plaque (Local Player — YOU)
     const me = publicState.seats[mySeat];
+    const meOpenedStr = getOpenedDisplayScore(me);
     $('local-turn-dome').classList.toggle('active', isMyTurn);
     $('plaque-bottom').classList.toggle('active-seat-glow', isMyTurn);
     $('local-plaque-name').textContent = me.name;
-    $('local-plaque-score').textContent = `${me.totalScore} p`;
-    $('local-plaque-opened').textContent = me.openedMode === 'sets' ? '101' : (me.openedMode === 'pairs' ? 'ÇİFT' : '0');
-    $('hud-timer-badge').textContent = isMyTurn ? timerTxt : `${me.tileCount}t`;
+    if ($('local-plaque-score')) {
+      $('local-plaque-score').textContent = '';
+      $('local-plaque-score').classList.add('hidden');
+    }
+    const localOpenedEl = $('local-plaque-opened');
+    if (localOpenedEl) {
+      localOpenedEl.textContent = meOpenedStr || '';
+      localOpenedEl.classList.toggle('hidden', !meOpenedStr);
+    }
+    const localTimerEl = $('hud-timer-badge');
+    if (localTimerEl) {
+      localTimerEl.textContent = isMyTurn ? timerTxt : '';
+      localTimerEl.classList.toggle('hidden', !isMyTurn || !timerTxt);
+    }
+    const localStatsBox = $('local-plaque-stats');
+    if (localStatsBox) {
+      localStatsBox.classList.toggle('hidden', !meOpenedStr && !(isMyTurn && timerTxt));
+    }
 
     // 2. Top Plaque (Across Player: topSeat)
     const topP = publicState.seats[topSeat];
     const topActive = publicState.phase === 'playing' && publicState.currentTurn === topSeat;
+    const topOpenedStr = getOpenedDisplayScore(topP);
     const plaqueTop = $('plaque-top');
     plaqueTop.className = 'wood-plaque plaque-top' + (topActive ? ' active-seat-glow' : '');
+    const showTopBox = Boolean(topOpenedStr || (topActive && timerTxt));
     plaqueTop.innerHTML = `
       <div class="avatar-box">${AVATARS[topSeat]}</div>
-      <div class="p-score-box">
-        <div>${topP.totalScore}</div>
-        <div class="p-timer-text">${topActive ? timerTxt : topP.tileCount + 't'}</div>
+      <div class="v-name-text" style="font-size:10px;max-width:54px;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(topP.name)}</div>
+      <div class="p-score-box ${showTopBox ? '' : 'hidden'}">
+        ${topOpenedStr ? `<div>${topOpenedStr}</div>` : ''}
+        <div class="p-timer-text ${topActive && timerTxt ? '' : 'hidden'}" data-seat="${topSeat}">${topActive ? timerTxt : ''}</div>
       </div>
     `;
 
     // 3. Left Vertical Plaque (Previous Player: leftSeat)
     const leftP = publicState.seats[leftSeat];
     const leftActive = publicState.phase === 'playing' && publicState.currentTurn === leftSeat;
+    const leftOpenedStr = getOpenedDisplayScore(leftP);
+    const showLeftBox = Boolean(leftOpenedStr || (leftActive && timerTxt));
     const plaqueLeft = $('plaque-left');
     plaqueLeft.className = 'wood-plaque plaque-vertical plaque-left' + (leftActive ? ' active-seat-glow' : '');
     plaqueLeft.innerHTML = `
-      <div class="v-stats-box">${leftP.openedMode ? '101' : '0'} | ${leftActive ? timerTxt : leftP.tileCount}</div>
+      <div class="v-stats-box ${showLeftBox ? '' : 'hidden'}">
+        ${leftOpenedStr ? `<div>${leftOpenedStr}</div>` : ''}
+        <div class="p-timer-text ${leftActive && timerTxt ? '' : 'hidden'}" data-seat="${leftSeat}">${leftActive ? timerTxt : ''}</div>
+      </div>
       <div class="v-name-wrap">
         <span class="v-name-text">${escapeHtml(leftP.name)}</span>
-        <span class="v-coins-text">${leftP.totalScore} p</span>
       </div>
       <div class="avatar-box">${AVATARS[leftSeat]}</div>
     `;
@@ -1394,15 +1598,19 @@
     // 4. Right Vertical Plaque (Next Player: rightSeat)
     const rightP = publicState.seats[rightSeat];
     const rightActive = publicState.phase === 'playing' && publicState.currentTurn === rightSeat;
+    const rightOpenedStr = getOpenedDisplayScore(rightP);
+    const showRightBox = Boolean(rightOpenedStr || (rightActive && timerTxt));
     const plaqueRight = $('plaque-right');
     plaqueRight.className = 'wood-plaque plaque-vertical plaque-right' + (rightActive ? ' active-seat-glow' : '');
     plaqueRight.innerHTML = `
       <div class="avatar-box">${AVATARS[rightSeat]}</div>
       <div class="v-name-wrap">
         <span class="v-name-text">${escapeHtml(rightP.name)}</span>
-        <span class="v-coins-text">${rightP.totalScore} p</span>
       </div>
-      <div class="v-stats-box">${rightP.openedMode ? '101' : '0'} | ${rightActive ? timerTxt : rightP.tileCount}</div>
+      <div class="v-stats-box ${showRightBox ? '' : 'hidden'}">
+        ${rightOpenedStr ? `<div>${rightOpenedStr}</div>` : ''}
+        <div class="p-timer-text ${rightActive && timerTxt ? '' : 'hidden'}" data-seat="${rightSeat}">${rightActive ? timerTxt : ''}</div>
+      </div>
     `;
 
     // 5. Four Corner Discard Piles
@@ -1592,12 +1800,49 @@
       }
     }
 
-    // Analyze player's rack groups for the live 101 badge & ÇİFT AÇ / SERİ AÇ buttons
+    // Analyze player's rack groups for the live points/penalty badge & ÇİFT AÇ / SERİ AÇ buttons
     const rackAnalysis = analyzeRackContiguousGroups();
-    $('rack-points-pill').textContent = String(rackAnalysis.seriesPoints);
-    $('rack-points-pill').classList.toggle('ready-101', rackAnalysis.seriesPoints >= 101);
-    $('felt-series-badge').textContent = String(tableSeriesPts > 0 ? tableSeriesPts : rackAnalysis.seriesPoints);
-    $('felt-pairs-badge').textContent = String(tablePairsPts > 0 ? tablePairsPts : rackAnalysis.pairCount);
+    const pointsPillEl = $('rack-points-pill');
+    if (pointsPillEl) {
+      if (myPubSeat.openedMode !== null) {
+        // Player has already opened their hand -> show their remaining hand penalty
+        const mult = myPubSeat.openedMode === 'pairs' ? 2 : 1;
+        const remainingPenalty = Engine.calculateHandTilePoints(privateRack, ind) * mult;
+        pointsPillEl.textContent = String(remainingPenalty);
+        pointsPillEl.classList.remove('ready-101');
+      } else {
+        const isPairsView = rackArrangeMode === 'pairs' || (rackAnalysis.pairCount >= 5 && rackAnalysis.seriesPoints < 101);
+        if (isPairsView) {
+          // Arranging pairs: 4 pairs or fewer -> show 0; 5 pairs or more -> show remaining hand tiles sum * 2
+          if (rackAnalysis.pairCount <= 4) {
+            pointsPillEl.textContent = '0';
+            pointsPillEl.classList.remove('ready-101');
+          } else {
+            const pairTileIds = new Set(rackAnalysis.pairMelds.flat());
+            const leftoverAfterPairs = privateRack.filter((t) => !pairTileIds.has(t.id));
+            const remainingPairPenalty = Engine.calculateHandTilePoints(leftoverAfterPairs, ind) * 2;
+            pointsPillEl.textContent = String(remainingPairPenalty);
+            pointsPillEl.classList.add('ready-101');
+          }
+        } else {
+          // Arranging series: show ONLY the points of the arranged (dizili) series on the rack
+          pointsPillEl.textContent = String(rackAnalysis.seriesPoints);
+          pointsPillEl.classList.toggle('ready-101', rackAnalysis.seriesPoints >= 101);
+        }
+      }
+    }
+
+    // Show red penalty text to the right of the wooden rack if the player received a penalty (işlek discard / Okey taken / Okey discard)
+    const rackPenaltyEl = $('rack-penalty-badge');
+    if (rackPenaltyEl) {
+      const pen = myPubSeat.penaltyAdjust || 0;
+      if (pen > 0) {
+        rackPenaltyEl.textContent = `+${pen} CEZA`;
+        rackPenaltyEl.classList.remove('hidden');
+      } else {
+        rackPenaltyEl.classList.add('hidden');
+      }
+    }
 
     // Compute all "İŞLE" (lay-off) eligible tiles in rack so their bottom dot grows red
     const islePlan = Engine.findIslePlan(privateRack, publicState.tableMelds || [], ind);
@@ -2148,6 +2393,8 @@
     hostState = null;
     publicState = null;
     privateRack = [];
+    lastArrangedDealKey = null;
+    rackArrangeMode = 'runs';
     roomCode = null;
     localSeat = null;
     peerToSeat.clear();
@@ -2248,6 +2495,7 @@
   // SERİ DİZ (Sort Runs with gaps on the 2-row wooden rack + FLIP slide animation)
   $('btn-sort-runs').addEventListener('click', () => {
     const oldRects = captureCurrentRackRects();
+    rackArrangeMode = 'runs';
     autoArrangeRackWithGaps('runs');
     renderGameView();
     playRackFLIP(oldRects, 300);
@@ -2256,6 +2504,7 @@
   // ÇİFT DİZ (Sort Pairs/Sets with gaps on the 2-row wooden rack + FLIP slide animation)
   $('btn-sort-sets').addEventListener('click', () => {
     const oldRects = captureCurrentRackRects();
+    rackArrangeMode = 'pairs';
     autoArrangeRackWithGaps('sets');
     renderGameView();
     playRackFLIP(oldRects, 300);

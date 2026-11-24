@@ -34,6 +34,8 @@
     // Tile & action penalties
     UNPLAYED_OKEY_HAND_VALUE: 101,    // Unplayed Okey left in hand at round end counts as 101 pts [Pagat: "Each unplayed joker left in a player's hand counts 101"]
     DISCARD_OKEY_PENALTY: 101,        // Immediate penalty for discarding an Okey without going out [Pagat: "A player who discards a joker is penalised 101 points"]
+    DISCARD_PLAYABLE_TILE_PENALTY: 101, // Immediate +101 penalty for discarding a tile that is playable (işlek) onto an existing table meld
+    OKEY_STOLEN_FROM_MELD_PENALTY: 101, // Immediate +101 penalty to the player who opened a meld with an Okey when someone retrieves that Okey from the table
 
     // Scenario A: Winner opened with sets/runs & discarded a normal tile [Pagat Scoring Table]
     SCENARIO_A: Object.freeze({
@@ -1009,6 +1011,7 @@
         seatToken: seatOpt.seatToken || `token-seat-${i}-${hashSeed(seed + ':' + i).toString(16)}`,
         rack: [],
         openedMode: null, // null | 'sets' | 'pairs'
+        openedScore: null, // number (series totalPoints, or pairCount * 11)
         discardPile: [],
         roundScore: 0,
         totalScore: 0,
@@ -1019,17 +1022,24 @@
       });
     }
 
+    const initialStarterSeat = typeof opts.starterSeat === 'number'
+      ? ((opts.starterSeat % 4) + 4) % 4
+      : Math.floor(createRng(`${seed}:initialStarter`)() * 4);
+
     const state = {
       version: 1,
       seq: 1,
       roomCode,
       seed,
+      dealCounter: 0,
+      rematchCount: 0,
+      initialStarterSeat,
       config,
       phase: 'lobby', // 'lobby' | 'playing' | 'roundEnd' | 'matchEnd'
       roundIndex: 0,
       totalRounds,
-      starterSeat: 0,
-      currentTurn: 0,
+      starterSeat: initialStarterSeat,
+      currentTurn: initialStarterSeat,
       turnPhase: 'act', // 'draw' | 'act'
       turnDeadlineMs: null,
       indicator: null,
@@ -1053,8 +1063,10 @@
   function startRound(state, roundIndex) {
     const rIdx = roundIndex != null ? roundIndex : state.roundIndex;
     state.roundIndex = rIdx;
+    state.dealCounter = (state.dealCounter || 0) + 1;
     state.phase = 'playing';
-    state.starterSeat = rIdx % 4;
+    const baseStarter = typeof state.initialStarterSeat === 'number' ? state.initialStarterSeat : 0;
+    state.starterSeat = (baseStarter + rIdx) % 4;
     state.currentTurn = state.starterSeat;
     // Starter begins with 22 tiles and skips the first draw ('act' phase)
     state.turnPhase = 'act';
@@ -1062,7 +1074,8 @@
     state.nextMeldId = 1;
     state.winnerSeat = null;
 
-    const roundSeed = `${state.seed}:round:${rIdx}`;
+    const dealSuffix = state.dealCounter > 1 ? `:deal:${state.dealCounter}` : '';
+    const roundSeed = `${state.seed}:round:${rIdx}${dealSuffix}`;
     const rng = createRng(roundSeed);
     const deck = shuffleDeck(createDeck(), rng);
 
@@ -1078,6 +1091,7 @@
       const seatObj = state.seats[s];
       seatObj.rack = sortRackByRuns(deck.splice(0, count), indicator);
       seatObj.openedMode = null;
+      seatObj.openedScore = null;
       seatObj.discardPile = [];
       seatObj.roundScore = 0;
       seatObj.penaltyAdjust = 0;
@@ -1127,7 +1141,10 @@
     }
 
     if (state.phase === 'matchEnd' || state.roundIndex + 1 >= state.totalRounds) {
-      // Rematch in the same lobby: reset match scores and start from Round 0
+      // Rematch in the same lobby: reset match scores, advance rematchCount & random starter, and deal fresh tiles
+      state.rematchCount = (state.rematchCount || 0) + 1;
+      const rematchRng = createRng(`${state.seed}:rematch:${state.rematchCount}:${state.dealCounter || 0}`);
+      state.initialStarterSeat = Math.floor(rematchRng() * 4);
       state.roundHistory = [];
       state.matchWinnerSeat = null;
       for (let s = 0; s < 4; s++) {
@@ -1311,6 +1328,9 @@
           }
 
           player.openedMode = openRes.mode;
+          player.openedScore = openRes.mode === 'pairs'
+            ? (openRes.pairCount || openRes.melds.length) * 11
+            : openRes.totalPoints;
           player.mustOpenWithTileId = null;
           if (player.takenDiscardTileId != null && usedIds.has(player.takenDiscardTileId)) {
             player.takenDiscardTileId = null;
@@ -1338,6 +1358,8 @@
           return { ok: true, state, mode: openRes.mode, totalPoints: openRes.totalPoints };
         } else {
           // Player has ALREADY opened earlier -> laying down additional new melds from hand
+          const anyPairsOpenedAtTable = state.seats.some((s) => s.openedMode === 'pairs') ||
+            state.tableMelds.some((m) => m.kind === 'pair');
           const validated = [];
           for (const group of meldTileGroups) {
             const res = validateMeld(group, state.indicator, state.config);
@@ -1347,8 +1369,12 @@
             if (player.openedMode === 'pairs' && res.kind !== 'pair') {
               return { ok: false, reason: 'You opened with pairs, so you can only lay down new pairs.' };
             }
-            if (player.openedMode === 'sets' && res.kind === 'pair') {
-              return { ok: false, reason: 'You opened with sets/runs, so you cannot lay down pairs.' };
+            // A player who opened with series/sets CAN lay down pairs if someone at the table has already opened with pairs!
+            if (player.openedMode === 'sets' && res.kind === 'pair' && !anyPairsOpenedAtTable) {
+              return {
+                ok: false,
+                reason: 'Masada çift açan oyuncu olmadığı için çift işleyemezsiniz (No player has opened with pairs yet).'
+              };
             }
             validated.push(res);
           }
@@ -1421,8 +1447,20 @@
           player.takenDiscardTileId = null;
         }
         player.rack = player.rack.filter((t) => !usedIds.has(t.id));
+        let penaltySeat = null;
+        let penaltyPoints = 0;
+        let penaltyReason = null;
         if (res.retrievedOkey) {
           player.rack.push(res.retrievedOkey);
+          // Rule: When a player takes the Okey from a table meld, the player who opened that meld with the Okey gets +101 penalty
+          const ownerSeat = targetMeld.ownerSeat;
+          if (ownerSeat != null && state.seats[ownerSeat]) {
+            const pen = state.config.OKEY_STOLEN_FROM_MELD_PENALTY || 101;
+            state.seats[ownerSeat].penaltyAdjust += pen;
+            penaltySeat = ownerSeat;
+            penaltyPoints = pen;
+            penaltyReason = 'OKEY_STOLEN';
+          }
         }
         targetMeld.tiles = res.orderedTiles;
         targetMeld.points = res.points;
@@ -1433,9 +1471,12 @@
           seat,
           meldId: targetMeld.id,
           tiles: tilesToAdd,
-          retrievedOkey: res.retrievedOkey || null
+          retrievedOkey: res.retrievedOkey || null,
+          penaltySeat,
+          penaltyPoints,
+          penaltyReason
         };
-        return { ok: true, state, retrievedOkey: res.retrievedOkey || null };
+        return { ok: true, state, retrievedOkey: res.retrievedOkey || null, penaltySeat, penaltyPoints };
       }
 
       case 'DISCARD': {
@@ -1478,9 +1519,21 @@
           return { ok: true, state, roundEnded: true };
         }
 
-        // Penalty for discarding an Okey without going out (Pagat: +101 penalty)
+        // Penalty for discarding an Okey or discarding a tile that is playable (işlek) onto existing table melds (+101 penalty)
+        const discardedIsPlayableOnTable = !discardedIsOkey &&
+          state.tableMelds.length > 0 &&
+          state.tableMelds.some((tm) => validateLayOff(tm, [discarded], state.indicator, state.config).valid);
+
+        let discardPenaltyPoints = 0;
+        let discardPenaltyReason = null;
         if (discardedIsOkey) {
-          player.penaltyAdjust += state.config.DISCARD_OKEY_PENALTY;
+          discardPenaltyPoints = state.config.DISCARD_OKEY_PENALTY || 101;
+          discardPenaltyReason = 'DISCARD_OKEY';
+          player.penaltyAdjust += discardPenaltyPoints;
+        } else if (discardedIsPlayableOnTable) {
+          discardPenaltyPoints = state.config.DISCARD_PLAYABLE_TILE_PENALTY || 101;
+          discardPenaltyReason = 'DISCARD_PLAYABLE';
+          player.penaltyAdjust += discardPenaltyPoints;
         }
 
         // Check if draw pile is now empty after this turn -> round ends by stock exhaustion
@@ -1495,7 +1548,10 @@
           state.lastAction = {
             type: 'STOCK_EXHAUSTED',
             seat,
-            tile: discarded
+            tile: discarded,
+            penaltySeat: discardPenaltyPoints > 0 ? seat : null,
+            penaltyPoints: discardPenaltyPoints,
+            penaltyReason: discardPenaltyReason
           };
           return { ok: true, state, roundEnded: true };
         }
@@ -1508,7 +1564,10 @@
           type: 'DISCARD',
           seat,
           tile: discarded,
-          nextTurn: state.currentTurn
+          nextTurn: state.currentTurn,
+          penaltySeat: discardPenaltyPoints > 0 ? seat : null,
+          penaltyPoints: discardPenaltyPoints,
+          penaltyReason: discardPenaltyReason
         };
         return { ok: true, state, roundEnded: false };
       }
@@ -1600,10 +1659,15 @@
   // ---------------------------------------------------------------------------
   // Simple Legal-Move Bot AI & Timeout Auto-Play
   // ---------------------------------------------------------------------------
-  function chooseSafeDiscardTile(rack, indicator) {
+  function chooseSafeDiscardTile(rack, indicator, tableMelds, config) {
     // Never discard an Okey unless it is the only tile in hand
     const nonOkeys = rack.filter((t) => !isOkeyTile(t, indicator));
-    const pool = nonOkeys.length > 0 ? nonOkeys : rack;
+    let pool = nonOkeys.length > 0 ? nonOkeys : rack;
+    // Also avoid discarding a tile that is playable (işlek) onto existing table melds if a safe tile exists
+    if (Array.isArray(tableMelds) && tableMelds.length > 0) {
+      const nonPlayable = pool.filter((t) => !tableMelds.some((tm) => validateLayOff(tm, [t], indicator, config).valid));
+      if (nonPlayable.length > 0) pool = nonPlayable;
+    }
     // Prefer discarding highest number tile that isn't part of a pair
     const counts = new Map();
     for (const t of pool) {
@@ -1648,7 +1712,7 @@
 
     // Step 2: Discard a safe tile (bots do not open their hands)
     if (state.turnPhase === 'act') {
-      const discardTile = chooseSafeDiscardTile(player.rack, state.indicator);
+      const discardTile = chooseSafeDiscardTile(player.rack, state.indicator, state.tableMelds, state.config);
       const discRes = applyIntent(state, seat, { type: 'DISCARD', tileId: discardTile.id });
       if (!discRes.ok) return discRes;
       actions.push({ type: 'DISCARD', tileId: discardTile.id });
@@ -1672,6 +1736,8 @@
       phase: state.phase,
       roundIndex: state.roundIndex,
       totalRounds: state.totalRounds,
+      dealCounter: state.dealCounter || 0,
+      rematchCount: state.rematchCount || 0,
       starterSeat: state.starterSeat,
       currentTurn: state.currentTurn,
       turnPhase: state.turnPhase,
@@ -1693,6 +1759,7 @@
         connected: s.connected,
         tileCount: s.rack.length,
         openedMode: s.openedMode,
+        openedScore: s.openedScore != null ? s.openedScore : null,
         discardPile: s.discardPile.map((t) => Object.assign({}, t)),
         roundScore: s.roundScore,
         totalScore: s.totalScore,
